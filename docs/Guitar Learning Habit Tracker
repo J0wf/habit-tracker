@@ -1,2 +1,200 @@
-#Guitar Learning App
+package com.guitartracker;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class GuitarHabitTrackerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(GuitarHabitTrackerApplication.class, args);
+    }
+}
+
+// --- User.java ---
+package com.guitartracker.model;
+
+import jakarta.persistence.*;
+import java.util.List;
+
+@Entity
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String username;
+    private String email;
+    private String password;
+    private int targetDaysPerWeek;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private List<PracticeLog> practiceLogs;
+
+    // Getters and Setters
+}
+
+// --- PracticeLog.java ---
+package com.guitartracker.model;
+
+import jakarta.persistence.*;
+import java.time.LocalDate;
+
+@Entity
+public class PracticeLog {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private LocalDate date;
+
+    @ManyToOne
+    private User user;
+
+    // Getters and Setters
+}
+
+// --- UserRepository.java ---
+package com.guitartracker.repository;
+
+import com.guitartracker.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface UserRepository extends JpaRepository<User, Long> {
+    User findByUsername(String username);
+}
+
+// --- PracticeLogRepository.java ---
+package com.guitartracker.repository;
+
+import com.guitartracker.model.PracticeLog;
+import com.guitartracker.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.time.LocalDate;
+import java.util.List;
+
+public interface PracticeLogRepository extends JpaRepository<PracticeLog, Long> {
+    List<PracticeLog> findByUserAndDateBetween(User user, LocalDate start, LocalDate end);
+}
+
+// --- UserService.java ---
+package com.guitartracker.service;
+
+import com.guitartracker.model.User;
+import com.guitartracker.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class UserService {
+    @Autowired
+    private UserRepository userRepository;
+
+    public User createUser(User user) {
+        return userRepository.save(user);
+    }
+
+    public User getUser(String username) {
+        return userRepository.findByUsername(username);
+    }
+}
+
+// --- PracticeLogService.java ---
+package com.guitartracker.service;
+
+import com.guitartracker.model.PracticeLog;
+import com.guitartracker.model.User;
+import com.guitartracker.repository.PracticeLogRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.List;
+
+@Service
+public class PracticeLogService {
+    @Autowired
+    private PracticeLogRepository logRepository;
+
+    public PracticeLog logPractice(User user) {
+        PracticeLog log = new PracticeLog();
+        log.setUser(user);
+        log.setDate(LocalDate.now());
+        return logRepository.save(log);
+    }
+
+    public List<PracticeLog> getLogsForWeek(User user) {
+        LocalDate today = LocalDate.now();
+        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        LocalDate endOfWeek = startOfWeek.plusDays(6);
+        return logRepository.findByUserAndDateBetween(user, startOfWeek, endOfWeek);
+    }
+}
+
+// --- UserController.java ---
+package com.guitartracker.controller;
+
+import com.guitartracker.model.User;
+import com.guitartracker.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    @Autowired
+    private UserService userService;
+
+    @PostMapping("/register")
+    public User register(@RequestBody User user) {
+        return userService.createUser(user);
+    }
+
+    @GetMapping("/{username}")
+    public User getUser(@PathVariable String username) {
+        return userService.getUser(username);
+    }
+}
+
+// --- PracticeLogController.java ---
+package com.guitartracker.controller;
+
+import com.guitartracker.model.PracticeLog;
+import com.guitartracker.model.User;
+import com.guitartracker.service.PracticeLogService;
+import com.guitartracker.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/practice")
+public class PracticeLogController {
+    @Autowired
+    private PracticeLogService logService;
+
+    @Autowired
+    private UserService userService;
+
+    @PostMapping("/{username}")
+    public PracticeLog logPractice(@PathVariable String username) {
+        User user = userService.getUser(username);
+        return logService.logPractice(user);
+    }
+
+    @GetMapping("/{username}/week")
+    public List<PracticeLog> getWeeklyLogs(@PathVariable String username) {
+        User user = userService.getUser(username);
+        return logService.getLogsForWeek(user);
+    }
+}
+
+// --- application.properties ---
+spring.datasource.url=jdbc:h2:mem:testdb
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.h2.console.enabled=true
 
